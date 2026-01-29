@@ -48,7 +48,7 @@ def compare():
 
     # Write results to file
     summary_path = os.path.join(results_dir, "summary.txt")
-    with open(summary_path, "w") as f:
+    with open(summary_path, "w", encoding="utf-8") as f:
         f.write("Microgrid Energy Scheduling Results\n")
         f.write("=================================\n")
         f.write(f"Baseline Total Cost   : ₹{baseline_cost:.2f}\n")
