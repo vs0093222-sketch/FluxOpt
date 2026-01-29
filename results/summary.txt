@@ -1,0 +1,5 @@
+Microgrid Energy Scheduling Results
+=================================
+Baseline Total Cost   : ₹1476.00
+Optimized Total Cost  : ₹1392.00
+Cost Savings          : 5.69%
