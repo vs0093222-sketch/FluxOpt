@@ -36,7 +36,7 @@ def compare():
     os.makedirs("results", exist_ok=True)
 
     # Write results to file
-    with open("results/summary.txt", "w") as f:
+    with open("results/summary.txt", "w", encoding="utf-8") as f:
         f.write("Microgrid Energy Scheduling Results\n")
         f.write("=================================\n")
         f.write(f"Baseline Total Cost   : ₹{baseline_cost:.2f}\n")
