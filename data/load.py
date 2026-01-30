@@ -1,39 +1,39 @@
 """
 load.py
 
-Defines the hourly electricity demand (load profile) for a 24-hour period.
-Unit: kWh per hour
-
-Use case modeled:
-- Small hospital / MSME
-- Low demand at night
-- Peak demand during working and evening hours
+Defines load, solar, and grid tariff profiles.
 """
 
-# Hourly load demand for 24 hours (0–23)
+# Hourly load demand for 24 hours (kWh)
 LOAD = [
-    8,   # 12 AM
-    7,   # 1 AM
-    6,   # 2 AM
-    6,   # 3 AM
-    7,   # 4 AM
-    10,  # 5 AM
-    14,  # 6 AM
-    18,  # 7 AM
-    22,  # 8 AM
-    26,  # 9 AM
-    28,  # 10 AM
-    30,  # 11 AM
-    29,  # 12 PM
-    27,  # 1 PM
-    25,  # 2 PM
-    24,  # 3 PM
-    26,  # 4 PM
-    30,  # 5 PM
-    32,  # 6 PM
-    34,  # 7 PM
-    30,  # 8 PM
-    22,  # 9 PM
-    16,  # 10 PM
-    12   # 11 PM
+    8, 7, 6, 6, 7, 10,
+    14, 18, 22, 26, 28, 30,
+    29, 27, 25, 24, 26, 30,
+    32, 34, 30, 22, 16, 12
 ]
+
+
+def load_profiles():
+    """
+    Returns load, solar generation, and grid tariff profiles
+    """
+
+    load = LOAD
+
+    # Solar generation profile (kWh)
+    solar = [
+        0, 0, 0, 0, 0, 2,
+        6, 10, 14, 18, 22, 25,
+        26, 24, 20, 15, 10, 5,
+        1, 0, 0, 0, 0, 0
+    ]
+
+    # Time-of-day grid tariff (₹/kWh)
+    grid_tariff = [
+        4, 4, 4, 4, 4, 5,
+        6, 6, 7, 7, 8, 8,
+        8, 7, 7, 6, 6, 8,
+        10, 10, 8, 6, 5, 4
+    ]
+
+    return load, solar, grid_tariff
