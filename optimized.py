@@ -1,79 +1,73 @@
 """
 optimized.py
 
-Implements a cost-aware optimized microgrid energy scheduler.
-
-Optimized Logic:
-1. Solar is always used first.
-2. Battery is discharged during peak grid tariff hours.
-3. Battery is charged during cheap grid tariff hours.
-4. Grid is used when necessary.
-5. Diesel is avoided (not used in this simplified prototype).
-
-This strategy minimizes total energy cost while respecting battery constraints.
+Cost-aware, explainable microgrid scheduler.
 """
 
-from data.load import LOAD
-from data.solar import SOLAR
-from data.tariff import GRID_TARIFF, BATTERY
+from data.load import load_profiles
+
+# System parameters
+BATTERY_EFFICIENCY = 0.9
+MAX_CHARGE_RATE = 20       # kWh per hour
+MAX_DISCHARGE_RATE = 20    # kWh per hour
+
+CO2_PER_DIESEL_UNIT = 2.68  # kg CO2 per unit diesel
 
 
-def get_grid_tariff(hour):
+def run_optimized() -> float:
     """
-    Returns grid tariff based on hour of day.
-    """
-    if hour < 6:
-        return GRID_TARIFF["night"]
-    elif hour < 18:
-        return GRID_TARIFF["day"]
-    else:
-        return GRID_TARIFF["peak"]
-
-
-def run_optimized():
-    """
-    Runs a 24-hour optimized simulation.
+    Runs optimized cost-aware scheduling.
 
     Returns:
-        total_cost (float): Optimized total grid energy cost for the day
+        total_cost (float)
     """
 
-    battery_soc = 0.0  # State of Charge in kWh
+    # Load profiles
+    load, solar, grid_tariff = load_profiles()
+
+    # Configurable parameters
+    diesel_cost = 18.0        # ₹/kWh
+    battery_capacity = 100.0 # kWh
+
+    battery_soc = 0.0
     total_cost = 0.0
+    diesel_used = 0.0
 
-    for hour in range(24):
-        load = LOAD[hour]
-        solar = SOLAR[hour]
-        tariff = get_grid_tariff(hour)
+    for hour in range(len(load)):
+        remaining_load = load[hour]
 
-        # 1. Use solar to meet load
-        solar_used = min(load, solar)
-        load -= solar_used
+        # 1️⃣ Use solar first
+        solar_used = min(solar[hour], remaining_load)
+        remaining_load -= solar_used
 
-        # 2. Discharge battery during peak hours
-        if tariff == GRID_TARIFF["peak"] and battery_soc > 0:
+        # 2️⃣ Charge battery with excess solar
+        excess_solar = solar[hour] - solar_used
+        if excess_solar > 0 and battery_soc < battery_capacity:
+            charge = min(
+                excess_solar,
+                MAX_CHARGE_RATE,
+                battery_capacity - battery_soc
+            )
+            battery_soc += charge * BATTERY_EFFICIENCY
+
+        # 3️⃣ Battery vs Grid (cost-aware)
+        if remaining_load > 0 and grid_tariff[hour] > diesel_cost:
             discharge = min(
-                load,
+                remaining_load,
                 battery_soc,
-                BATTERY["max_discharge"]
+                MAX_DISCHARGE_RATE
             )
             battery_soc -= discharge
-            load -= discharge
+            remaining_load -= discharge
 
-        # 3. Use grid for remaining load
-        if load > 0:
-            total_cost += load * tariff
+        # 4️⃣ Use grid
+        if remaining_load > 0:
+            total_cost += remaining_load * grid_tariff[hour]
+            remaining_load = 0
 
-        # 4. Charge battery during cheap grid hours
-        if tariff == GRID_TARIFF["night"]:
-            charge = BATTERY["max_charge"]
-            battery_soc += charge * BATTERY["efficiency"]
-            battery_soc = min(battery_soc, BATTERY["capacity"])
+        # 5️⃣ Diesel as last resort
+        if remaining_load > 0:
+            diesel_used += remaining_load
+            total_cost += remaining_load * diesel_cost
 
     return total_cost
-
-
-# Allow standalone testing
-if __name__ == "__main__":
-    cost = run_optimized()
-    print("Optimized Total Cost:", cost)
