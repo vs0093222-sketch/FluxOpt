@@ -1,73 +1,45 @@
-"""
-optimized.py
-Cost-aware, explainable microgrid scheduler.
-Dashboard-ready output.
-"""
-
 from data.load import load_profiles
-import os
-import json
 
-BATTERY_EFFICIENCY = 0.9
-MAX_CHARGE_RATE = 20
-MAX_DISCHARGE_RATE = 20
-DIESEL_COST = 18.0
-CO2_PER_DIESEL_UNIT = 2.68
-PEAK_GRID_THRESHOLD = 8
-
+GRID_CO2 = 0.82
+BATTERY_CAPACITY = 20
+BATTERY_EFF = 0.9
 
 def run_optimized():
-    load, solar, grid_tariff = load_profiles()
+    load, solar, tariff = load_profiles()
 
-    battery_capacity = 100.0
-    battery_soc = 0.0
+    battery = 0
+    total_cost = 0
+    total_co2 = 0
 
-    total_cost = 0.0
-    diesel_used = 0.0
-    decisions = []
+    for h in range(24):
+        remaining_load = load[h]
 
-    for hour in range(len(load)):
-        remaining = load[hour]
-        actions = []
+        # 1. Use solar first
+        solar_used = min(remaining_load, solar[h])
+        remaining_load -= solar_used
+        solar_left = solar[h] - solar_used
 
-        # Solar
-        solar_used = min(solar[hour], remaining)
-        remaining -= solar_used
-        if solar_used > 0:
-            actions.append(f"Solar {solar_used:.1f} kWh")
+        # 2. Charge battery from solar
+        if solar_left > 0 and battery < BATTERY_CAPACITY:
+            charge = min(solar_left, BATTERY_CAPACITY - battery)
+            battery += charge * BATTERY_EFF
 
-        # Charge battery
-        excess = solar[hour] - solar_used
-        if excess > 0 and battery_soc < battery_capacity:
-            charge = min(excess, MAX_CHARGE_RATE, battery_capacity - battery_soc)
-            battery_soc += charge * BATTERY_EFFICIENCY
-            actions.append(f"Charge {charge:.1f} kWh")
+        # 3. Charge battery from cheap grid
+        if tariff[h] <= 5 and battery < BATTERY_CAPACITY:
+            charge = min(3, BATTERY_CAPACITY - battery)
+            battery += charge * BATTERY_EFF
+            total_cost += charge * tariff[h]
+            total_co2 += charge * GRID_CO2
 
-        # Discharge battery at peak
-        if remaining > 0 and grid_tariff[hour] >= PEAK_GRID_THRESHOLD:
-            discharge = min(remaining, battery_soc, MAX_DISCHARGE_RATE)
-            if discharge > 0:
-                battery_soc -= discharge
-                remaining -= discharge
-                actions.append("Battery discharge")
+        # 4. Discharge battery during peak hours
+        if tariff[h] >= 8 and battery > 0:
+            discharge = min(battery, remaining_load)
+            battery -= discharge
+            remaining_load -= discharge
 
-        # Grid
-        if remaining > 0:
-            total_cost += remaining * grid_tariff[hour]
-            actions.append("Grid used")
-            remaining = 0
+        # 5. Grid last option
+        if remaining_load > 0:
+            total_cost += remaining_load * tariff[h]
+            total_co2 += remaining_load * GRID_CO2
 
-        # Diesel (still possible)
-        if remaining > 0:
-            diesel_used += remaining
-            total_cost += remaining * DIESEL_COST
-            actions.append("Diesel used")
-
-        decisions.append({
-            "hour": hour,
-            "actions": actions,
-            "battery_soc": round(battery_soc, 2)
-        })
-
-    total_co2 = diesel_used * CO2_PER_DIESEL_UNIT
-    return total_cost, total_co2, decisions
+    return round(total_cost, 2), round(total_co2, 2)
