@@ -1,55 +1,35 @@
 """
 baseline.py
-
-Implements the traditional (baseline) microgrid energy management strategy.
-
-Baseline Logic:
-1. Use solar power to meet load.
-2. Remaining load is met using grid electricity.
-3. Battery is charged ONLY from excess solar.
-4. No cost awareness, no future planning.
-
-This file acts as the reference case for comparison.
+Naive microgrid operation (NO battery intelligence)
 """
 
-from data.load import LOAD
-from data.solar import SOLAR
-from data.tariff import GRID_TARIFF, BATTERY
+from data.load import load_profiles
+
+DIESEL_COST = 18.0          # ₹/kWh
+CO2_PER_DIESEL_UNIT = 2.68  # kg CO₂ / kWh
 
 
 def run_baseline():
-    """
-    Runs a 24-hour baseline simulation.
+    load, solar, grid_tariff = load_profiles()
 
-    Returns:
-        total_cost (float): Total grid energy cost for the day
-    """
-
-    battery_soc = 0.0  # State of Charge in kWh
     total_cost = 0.0
+    diesel_used = 0.0
 
-    for hour in range(24):
-        load = LOAD[hour]
-        solar = SOLAR[hour]
+    for hour in range(len(load)):
+        remaining_load = load[hour]
 
-        # 1. Use solar to meet load
-        solar_used = min(load, solar)
-        load -= solar_used
-        excess_solar = solar - solar_used
+        # Use solar first
+        solar_used = min(solar[hour], remaining_load)
+        remaining_load -= solar_used
 
-        # 2. Charge battery using excess solar only
-        if excess_solar > 0:
-            battery_soc += excess_solar * BATTERY["efficiency"]
-            battery_soc = min(battery_soc, BATTERY["capacity"])
+        # Use grid
+        if remaining_load > 0:
+            # ❗ Naive rule: use diesel during peak grid hours
+            if grid_tariff[hour] >= 8:
+                diesel_used += remaining_load
+                total_cost += remaining_load * DIESEL_COST
+            else:
+                total_cost += remaining_load * grid_tariff[hour]
 
-        # 3. Use grid for remaining load (flat day tariff for baseline)
-        if load > 0:
-            total_cost += load * GRID_TARIFF["day"]
-
-    return total_cost
-
-
-# Allow standalone testing
-if __name__ == "__main__":
-    cost = run_baseline()
-    print("Baseline Total Cost:", cost)
+    total_co2 = diesel_used * CO2_PER_DIESEL_UNIT
+    return total_cost, total_co2
